@@ -2,6 +2,7 @@ import org.apache.tools.ant.taskdefs.condition.Os
 
 plugins {
     id 'application'
+    id 'java'
 }
 
 apply from: 'versions.gradle'
@@ -18,10 +19,18 @@ application {
 
 repositories {
     mavenCentral()
+    maven {
+        url 'https://maven.aliyun.com/repository/public'
+    }
 }
 
 dependencies {
     implementation deps.gdx.gdx
     implementation deps.gdx.backend_lwjgl3
     runtimeOnly   deps.gdx.platform_desktop
+    
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+    testImplementation 'org.mockito:mockito-core:3.11.2'
 }
