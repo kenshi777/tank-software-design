@@ -4,15 +4,15 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.Rectangle;
-import ru.mipt.bit.platformer.model.TankModel;
+import ru.mipt.bit.platformer.model.GameObjectModel;
 import ru.mipt.bit.platformer.util.GdxGameUtils;
 
-public class TankGraphics {
+public class TankGraphics implements GraphicsComponent {
     private Texture texture;
     private TextureRegion graphics;
     private Rectangle rectangle;
 
-    public TankGraphics(String texturePath, TiledMapTileLayer tileLayer, TankModel tankModel) {
+    public TankGraphics(String texturePath, TiledMapTileLayer tileLayer, GameObjectModel tankModel) {
         this.texture = new Texture(texturePath);
         this.graphics = new TextureRegion(texture);
         this.rectangle = GdxGameUtils.createBoundingRectangle(graphics);

@@ -4,10 +4,11 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.Rectangle;
+import ru.mipt.bit.platformer.model.GameObjectModel;
 import ru.mipt.bit.platformer.model.TreeModel;
 import ru.mipt.bit.platformer.util.GdxGameUtils;
 
-public class TreeGraphics {
+public class TreeGraphics implements GraphicsComponent {
     private Texture texture;
     private TextureRegion graphics;
     private Rectangle rectangle;

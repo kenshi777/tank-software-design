@@ -2,7 +2,7 @@ package ru.mipt.bit.platformer.model;
 
 import com.badlogic.gdx.math.GridPoint2;
 
-public class TankModel {
+public class TankModel implements RotatingGameObject {
     private GridPoint2 coordinates;
     private GridPoint2 destinationCoordinates;
     private float movementProgress;

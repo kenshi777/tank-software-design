@@ -9,18 +9,24 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.GridPoint2;
 import com.badlogic.gdx.math.Interpolation;
+import ru.mipt.bit.platformer.graphics.GraphicsComponent;
 import ru.mipt.bit.platformer.graphics.TankGraphics;
 import ru.mipt.bit.platformer.graphics.TreeGraphics;
 import ru.mipt.bit.platformer.model.Direction;
+import ru.mipt.bit.platformer.model.GameObjectModel;
 import ru.mipt.bit.platformer.model.Level;
 import ru.mipt.bit.platformer.model.TankModel;
 import ru.mipt.bit.platformer.model.TreeModel;
 import ru.mipt.bit.platformer.util.TileMovement;
+import ru.mipt.bit.platformer.util.CollisionDetector;
+import ru.mipt.bit.platformer.util.SimpleCollisionDetector;
 import ru.mipt.bit.platformer.input.InputHandler;
 
 import static com.badlogic.gdx.graphics.GL20.GL_COLOR_BUFFER_BIT;
 import static com.badlogic.gdx.math.MathUtils.isEqual;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.*;
+
+import java.util.Arrays;
 
 public class GameDesktopLauncher implements ApplicationListener {
 
@@ -31,10 +37,11 @@ public class GameDesktopLauncher implements ApplicationListener {
     private Level level;
     private TileMovement tileMovement;
 
-    private TankModel playerTankModel;
-    private TankGraphics playerTankGraphics;
-    private TreeModel treeObstacleModel;
-    private TreeGraphics treeObstacleGraphics;
+    private GameObjectModel playerTankModel;
+    private GraphicsComponent playerTankGraphics;
+    private GameObjectModel treeObstacleModel;
+    private GraphicsComponent treeObstacleGraphics;
+    private CollisionDetector collisionDetector;
 
     @Override
     public void create() {
@@ -50,7 +57,10 @@ public class GameDesktopLauncher implements ApplicationListener {
 
         // Create tree obstacle
         treeObstacleModel = new TreeModel(1, 3);
-        treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), treeObstacleModel);
+        treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), (TreeModel) treeObstacleModel);
+        
+        // Initialize collision detector
+        collisionDetector = new SimpleCollisionDetector(Arrays.asList(treeObstacleModel));
     }
 
     @Override
@@ -65,9 +75,9 @@ public class GameDesktopLauncher implements ApplicationListener {
         // Handle input
         Direction direction = InputHandler.getDirectionFromInput();
         if (direction != null && isEqual(playerTankModel.getMovementProgress(), 1f)) {
-            // Check for collision with obstacles
+            // Check for collision with obstacles using the collision detector
             GridPoint2 newDestination = direction.applyTo(playerTankModel.getCoordinates());
-            if (!treeObstacleModel.getCoordinates().equals(newDestination)) {
+            if (!collisionDetector.isCollision(playerTankModel, newDestination)) {
                 playerTankModel.move(direction);
             }
         }
@@ -90,7 +100,7 @@ public class GameDesktopLauncher implements ApplicationListener {
         batch.begin();
 
         // render player
-        drawTextureRegionUnscaled(batch, playerTankGraphics.getGraphics(), playerTankGraphics.getRectangle(), playerTankModel.getRotation());
+        drawTextureRegionUnscaled(batch, playerTankGraphics.getGraphics(), playerTankGraphics.getRectangle(), ((ru.mipt.bit.platformer.model.RotatingGameObject) playerTankModel).getRotation());
 
         // render tree obstacle
         drawTextureRegionUnscaled(batch, treeObstacleGraphics.getGraphics(), treeObstacleGraphics.getRectangle(), 0f);
