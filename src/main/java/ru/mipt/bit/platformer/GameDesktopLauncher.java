@@ -41,26 +41,74 @@ public class GameDesktopLauncher implements ApplicationListener {
     private GraphicsComponent playerTankGraphics;
     private GameObjectModel treeObstacleModel;
     private GraphicsComponent treeObstacleGraphics;
+    private java.util.List<GameObjectModel> treeModels;
+    private java.util.List<GraphicsComponent> treeGraphicsList;
     private CollisionDetector collisionDetector;
 
     @Override
     public void create() {
         batch = new SpriteBatch();
 
-        // load level tiles
-        level = new Level("level.tmx", batch);
-        tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
+        try {
+            // Load level from file
+            level = new Level("levels/sample_level.txt", batch, true);
+            
+            // Or generate a random level
+            // level = new Level(batch, 10, 8);
+            
+            // For now, keep the original behavior
+            // level = new Level("level.tmx", batch);
+            
+            tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
 
-        // Create player tank
-        playerTankModel = new TankModel(1, 1);
-        playerTankGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
+            // Create player tank at the start position defined in the level
+            if (level.getPlayerStartPosition() != null) {
+                playerTankModel = new TankModel(level.getPlayerStartPosition().x, level.getPlayerStartPosition().y);
+            } else {
+                // Fallback to default position
+                playerTankModel = new TankModel(1, 1);
+            }
+            playerTankGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
 
-        // Create tree obstacle
-        treeObstacleModel = new TreeModel(1, 3);
-        treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), (TreeModel) treeObstacleModel);
-        
-        // Initialize collision detector
-        collisionDetector = new SimpleCollisionDetector(Arrays.asList(treeObstacleModel));
+            // Create tree obstacles based on level data
+            this.treeModels = new java.util.ArrayList<>();
+            this.treeGraphicsList = new java.util.ArrayList<>();
+            
+            // For file-based or random levels, create trees from level data
+            if (level.getTreePositions() != null && !level.getTreePositions().isEmpty()) {
+                for (GridPoint2 treePos : level.getTreePositions()) {
+                    TreeModel treeModel = new TreeModel(treePos.x, treePos.y);
+                    TreeGraphics treeGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), treeModel);
+                    this.treeModels.add(treeModel);
+                    this.treeGraphicsList.add(treeGraphics);
+                }
+            } else {
+                // Fallback to original single tree for TMX levels
+                treeObstacleModel = new TreeModel(1, 3);
+                treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), (TreeModel) treeObstacleModel);
+                this.treeModels.add(treeObstacleModel);
+                this.treeGraphicsList.add(treeObstacleGraphics);
+            }
+            
+            // Store references for rendering
+            if (!this.treeGraphicsList.isEmpty()) {
+                treeObstacleGraphics = this.treeGraphicsList.get(0);
+                treeObstacleModel = this.treeModels.get(0);
+            }
+            
+            // Initialize collision detector with all trees
+            collisionDetector = new SimpleCollisionDetector(treeModels);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Fallback to original implementation if there's an error
+            level = new Level("level.tmx", batch);
+            tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
+            playerTankModel = new TankModel(1, 1);
+            playerTankGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
+            treeObstacleModel = new TreeModel(1, 3);
+            treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), (TreeModel) treeObstacleModel);
+            collisionDetector = new SimpleCollisionDetector(Arrays.asList(treeObstacleModel));
+        }
     }
 
     @Override
@@ -102,8 +150,12 @@ public class GameDesktopLauncher implements ApplicationListener {
         // render player
         drawTextureRegionUnscaled(batch, playerTankGraphics.getGraphics(), playerTankGraphics.getRectangle(), ((ru.mipt.bit.platformer.model.RotatingGameObject) playerTankModel).getRotation());
 
-        // render tree obstacle
-        drawTextureRegionUnscaled(batch, treeObstacleGraphics.getGraphics(), treeObstacleGraphics.getRectangle(), 0f);
+        // render tree obstacles
+        if (treeGraphicsList != null) {
+            for (GraphicsComponent treeGraphics : treeGraphicsList) {
+                drawTextureRegionUnscaled(batch, treeGraphics.getGraphics(), treeGraphics.getRectangle(), 0f);
+            }
+        }
 
         // submit all drawing requests
         batch.end();
@@ -127,7 +179,11 @@ public class GameDesktopLauncher implements ApplicationListener {
     @Override
     public void dispose() {
         // dispose of all the native resources (classes which implement com.badlogic.gdx.utils.Disposable)
-        treeObstacleGraphics.dispose();
+        if (treeGraphicsList != null) {
+            for (GraphicsComponent treeGraphics : treeGraphicsList) {
+                treeGraphics.dispose();
+            }
+        }
         playerTankGraphics.dispose();
         level.dispose();
         batch.dispose();
