@@ -12,7 +12,9 @@ import com.badlogic.gdx.math.Interpolation;
 import ru.mipt.bit.platformer.ai.AITankController;
 import ru.mipt.bit.platformer.commands.Command;
 import ru.mipt.bit.platformer.commands.MoveTankCommand;
+import ru.mipt.bit.platformer.commands.ToggleHealthBarsCommand;
 import ru.mipt.bit.platformer.graphics.GraphicsComponent;
+import ru.mipt.bit.platformer.graphics.HealthBarDecorator;
 import ru.mipt.bit.platformer.graphics.TankGraphics;
 import ru.mipt.bit.platformer.graphics.TreeGraphics;
 import ru.mipt.bit.platformer.model.Direction;
@@ -53,11 +55,29 @@ public class GameDesktopLauncher implements ApplicationListener {
     private CollisionDetector collisionDetector;
     private Random random;
     private AITankController aiTankController;
+    private InputHandler inputHandler;
+    private java.util.List<HealthBarDecorator> healthBarDecorators;
+    private boolean showHealthBars = false;
+    private boolean lKeyPressed = false;
 
     @Override
     public void create() {
         batch = new SpriteBatch();
         random = new Random();
+        inputHandler = new InputHandler();
+        healthBarDecorators = new java.util.ArrayList<>();
+        
+        // Register handler for 'L' key to toggle health bars
+        inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.L, new ru.mipt.bit.platformer.input.ButtonHandler() {
+            @Override
+            public boolean handle() {
+                showHealthBars = !showHealthBars;
+                for (HealthBarDecorator decorator : healthBarDecorators) {
+                    decorator.setShowHealthBar(showHealthBars);
+                }
+                return true;
+            }
+        });
 
         try {
             // Load level from file
@@ -78,7 +98,10 @@ public class GameDesktopLauncher implements ApplicationListener {
                 // Fallback to default position
                 playerTankModel = new TankModel(1, 1);
             }
-            playerTankGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
+            TankGraphics playerTankBaseGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
+            TankModel playerTankModelTyped = (TankModel) playerTankModel;
+            playerTankGraphics = new HealthBarDecorator(playerTankBaseGraphics, playerTankModelTyped.getHealth(), playerTankModelTyped.getMaxHealth());
+            healthBarDecorators.add((HealthBarDecorator) playerTankGraphics);
 
             // Create tree obstacles based on level data
             this.treeModels = new java.util.ArrayList<>();
@@ -145,7 +168,9 @@ public class GameDesktopLauncher implements ApplicationListener {
             
             // Create the AI tank model and graphics
             TankModel aiTankModel = new TankModel(tankPosition.x, tankPosition.y);
-            TankGraphics aiTankGraphics = new TankGraphics("images/tank_red.png", level.getGroundLayer(), aiTankModel);
+            TankGraphics aiTankBaseGraphics = new TankGraphics("images/tank_red.png", level.getGroundLayer(), aiTankModel);
+            HealthBarDecorator aiTankGraphics = new HealthBarDecorator(aiTankBaseGraphics, aiTankModel.getHealth(), aiTankModel.getMaxHealth());
+            healthBarDecorators.add(aiTankGraphics);
             
             this.aiTankModels.add(aiTankModel);
             this.aiTankGraphicsList.add(aiTankGraphics);
@@ -197,6 +222,22 @@ public class GameDesktopLauncher implements ApplicationListener {
 
         // get time passed since the last render
         float deltaTime = Gdx.graphics.getDeltaTime();
+
+        // Handle 'L' key for toggling health bars
+        if (Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.L)) {
+            if (!lKeyPressed) {
+                lKeyPressed = true;
+                showHealthBars = !showHealthBars;
+                for (HealthBarDecorator decorator : healthBarDecorators) {
+                    decorator.setShowHealthBar(showHealthBars);
+                }
+            }
+        } else {
+            lKeyPressed = false;
+        }
+
+        // Process input handlers
+        inputHandler.processInput();
 
         // Handle player input
         Direction direction = InputHandler.getDirectionFromInput();
@@ -259,6 +300,21 @@ public class GameDesktopLauncher implements ApplicationListener {
         if (treeGraphicsList != null) {
             for (GraphicsComponent treeGraphics : treeGraphicsList) {
                 drawTextureRegionUnscaled(batch, treeGraphics.getGraphics(), treeGraphics.getRectangle(), 0f);
+            }
+        }
+
+        // render health bars for tanks if enabled
+        if (showHealthBars) {
+            // Render player tank health bar
+            if (playerTankGraphics instanceof HealthBarDecorator) {
+                ((HealthBarDecorator) playerTankGraphics).renderHealthBar(batch, playerTankGraphics.getRectangle());
+            }
+
+            // Render AI tank health bars
+            for (GraphicsComponent aiTankGraphics : aiTankGraphicsList) {
+                if (aiTankGraphics instanceof HealthBarDecorator) {
+                    ((HealthBarDecorator) aiTankGraphics).renderHealthBar(batch, aiTankGraphics.getRectangle());
+                }
             }
         }
 

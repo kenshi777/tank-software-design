@@ -7,12 +7,26 @@ public class TankModel implements RotatingGameObject {
     private GridPoint2 destinationCoordinates;
     private float movementProgress;
     private float rotation;
+    private int health;
+    private int maxHealth;
 
     public TankModel(int startX, int startY) {
         this.coordinates = new GridPoint2(startX, startY);
         this.destinationCoordinates = new GridPoint2(coordinates);
         this.movementProgress = 1f;
         this.rotation = 0f;
+        // Initialize health with random value between 80 and 100
+        this.maxHealth = 80 + (int)(Math.random() * 21); // 80 to 100 inclusive
+        this.health = this.maxHealth;
+    }
+    
+    public TankModel(int startX, int startY, int health) {
+        this.coordinates = new GridPoint2(startX, startY);
+        this.destinationCoordinates = new GridPoint2(coordinates);
+        this.movementProgress = 1f;
+        this.rotation = 0f;
+        this.maxHealth = health;
+        this.health = health;
     }
 
     public void move(Direction direction) {
@@ -45,6 +59,14 @@ public class TankModel implements RotatingGameObject {
 
     public float getRotation() {
         return rotation;
+    }
+
+    public int getHealth() {
+        return health;
+    }
+
+    public int getMaxHealth() {
+        return maxHealth;
     }
 
     // Setter for movement progress
