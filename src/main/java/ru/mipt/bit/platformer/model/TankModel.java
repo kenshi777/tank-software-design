@@ -73,4 +73,19 @@ public class TankModel implements RotatingGameObject {
     public void setMovementProgress(float movementProgress) {
         this.movementProgress = movementProgress;
     }
+    
+    // Methods for handling damage and health
+    public void takeDamage(int damage) {
+        this.health -= damage;
+        if (this.health < 0) {
+            this.health = 0;
+        }
+    }
+    
+    public void setHealth(int health) {
+        this.health = health;
+        if (this.health > this.maxHealth) {
+            this.health = this.maxHealth;
+        }
+    }
 }

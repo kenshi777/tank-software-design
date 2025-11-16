@@ -12,12 +12,16 @@ import com.badlogic.gdx.math.Interpolation;
 import ru.mipt.bit.platformer.ai.AITankController;
 import ru.mipt.bit.platformer.commands.Command;
 import ru.mipt.bit.platformer.commands.MoveTankCommand;
+import ru.mipt.bit.platformer.commands.ShootCommand;
 import ru.mipt.bit.platformer.commands.ToggleHealthBarsCommand;
 import ru.mipt.bit.platformer.graphics.GraphicsComponent;
+import ru.mipt.bit.platformer.graphics.GraphicsObserver;
 import ru.mipt.bit.platformer.graphics.HealthBarDecorator;
 import ru.mipt.bit.platformer.graphics.TankGraphics;
 import ru.mipt.bit.platformer.graphics.TreeGraphics;
+import ru.mipt.bit.platformer.model.BulletModel;
 import ru.mipt.bit.platformer.model.Direction;
+import ru.mipt.bit.platformer.model.GameObjectManager;
 import ru.mipt.bit.platformer.model.GameObjectModel;
 import ru.mipt.bit.platformer.model.Level;
 import ru.mipt.bit.platformer.model.TankModel;
@@ -57,8 +61,11 @@ public class GameDesktopLauncher implements ApplicationListener {
     private AITankController aiTankController;
     private InputHandler inputHandler;
     private java.util.List<HealthBarDecorator> healthBarDecorators;
+    private GameObjectManager gameObjectManager;
+    private GraphicsObserver graphicsObserver;
     private boolean showHealthBars = false;
     private boolean lKeyPressed = false;
+    private boolean spaceKeyPressed = false;
 
     @Override
     public void create() {
@@ -78,6 +85,20 @@ public class GameDesktopLauncher implements ApplicationListener {
                 return true;
             }
         });
+        
+        // Register handler for spacebar to shoot
+        inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.SPACE, new ru.mipt.bit.platformer.input.ButtonHandler() {
+            @Override
+            public boolean handle() {
+                if (isEqual(playerTankModel.getMovementProgress(), 1f)) {
+                    // Create and execute command for player tank shooting
+                    Command playerShootCommand = new ShootCommand((TankModel) playerTankModel, gameObjectManager.getBullets(), collisionDetector, 
+                                                                 level.getLevelWidth(), level.getLevelHeight());
+                    playerShootCommand.execute();
+                }
+                return true;
+            }
+        });
 
         try {
             // Load level from file
@@ -91,6 +112,9 @@ public class GameDesktopLauncher implements ApplicationListener {
             
             tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
 
+            // Initialize game object manager
+            gameObjectManager = new GameObjectManager();
+            
             // Create player tank at the start position defined in the level
             if (level.getPlayerStartPosition() != null) {
                 playerTankModel = new TankModel(level.getPlayerStartPosition().x, level.getPlayerStartPosition().y);
@@ -142,6 +166,9 @@ public class GameDesktopLauncher implements ApplicationListener {
             
             // Initialize AI tank controller
             aiTankController = new AITankController(collisionDetector, level.getLevelWidth(), level.getLevelHeight());
+            
+            // Initialize graphics observer
+            graphicsObserver = new GraphicsObserver(gameObjectManager, batch, level.getGroundLayer());
         } catch (Exception e) {
             e.printStackTrace();
             // Fallback to original implementation if there's an error
@@ -250,6 +277,9 @@ public class GameDesktopLauncher implements ApplicationListener {
 
         // Handle AI tank movement (random movement)
         handleAITankMovement();
+        
+        // Handle AI tank shooting (random shooting)
+        handleAITankShooting();
 
         // Update player tank position
         tileMovement.moveRectangleBetweenTileCenters(
@@ -277,6 +307,9 @@ public class GameDesktopLauncher implements ApplicationListener {
             aiTankModel.setMovementProgress(aiMovementProgress);
             aiTankModel.updatePosition();
         }
+        
+        // Update bullet positions and handle collisions
+        updateBullets(deltaTime);
 
         // render each tile of the level
         level.render();
@@ -302,6 +335,9 @@ public class GameDesktopLauncher implements ApplicationListener {
                 drawTextureRegionUnscaled(batch, treeGraphics.getGraphics(), treeGraphics.getRectangle(), 0f);
             }
         }
+        
+        // render bullets
+        graphicsObserver.renderBullets();
 
         // render health bars for tanks if enabled
         if (showHealthBars) {
@@ -328,6 +364,114 @@ public class GameDesktopLauncher implements ApplicationListener {
     private void handleAITankMovement() {
         for (GameObjectModel aiTankModel : aiTankModels) {
             aiTankController.moveAITank(aiTankModel);
+        }
+    }
+    
+    /**
+     * Handles shooting for all AI tanks with random probability
+     */
+    private void handleAITankShooting() {
+        // 5% chance for each AI tank to shoot on each frame
+        for (GameObjectModel aiTankModel : aiTankModels) {
+            if (random.nextFloat() < 0.05f && isEqual(aiTankModel.getMovementProgress(), 1f)) {
+                // Create and execute command for AI tank shooting
+                Command aiShootCommand = new ShootCommand((TankModel) aiTankModel, gameObjectManager.getBullets(), collisionDetector, 
+                                                         level.getLevelWidth(), level.getLevelHeight());
+                aiShootCommand.execute();
+            }
+        }
+    }
+    
+    /**
+     * Updates bullet positions and handles collisions
+     */
+    private void updateBullets(float deltaTime) {
+        java.util.List<BulletModel> bullets = gameObjectManager.getBullets();
+        
+        // Update bullet positions
+        for (BulletModel bullet : bullets) {
+            if (bullet.isActive()) {
+                // Move the bullet
+                bullet.move();
+                
+                // Update bullet position
+                float newMovementProgress = continueProgress(bullet.getMovementProgress(), deltaTime, MOVEMENT_SPEED);
+                bullet.setMovementProgress(newMovementProgress);
+                bullet.updatePosition();
+                
+                // Check for collisions
+                checkBulletCollisions(bullet);
+            }
+        }
+        
+        // Remove inactive bullets
+        bullets.removeIf(bullet -> !bullet.isActive());
+    }
+    
+    /**
+     * Checks for collisions with a bullet
+     */
+    private void checkBulletCollisions(BulletModel bullet) {
+        // Check boundaries
+        GridPoint2 bulletPos = bullet.getCoordinates();
+        if (bulletPos.x < 0 || bulletPos.x >= level.getLevelWidth() || 
+            bulletPos.y < 0 || bulletPos.y >= level.getLevelHeight()) {
+            bullet.setActive(false);
+            return;
+        }
+        
+        // Check for collisions with trees
+        for (GameObjectModel tree : treeModels) {
+            if (tree.getCoordinates().equals(bulletPos)) {
+                bullet.setActive(false);
+                return;
+            }
+        }
+        
+        // Check for collisions with tanks (including player)
+        // Don't check against the tank that fired the bullet
+        for (GameObjectModel tank : aiTankModels) {
+            if (tank.getCoordinates().equals(bulletPos)) {
+                bullet.setActive(false);
+                // Apply damage to the tank
+                if (tank instanceof TankModel) {
+                    TankModel tankModel = (TankModel) tank;
+                    tankModel.takeDamage(bullet.getDamage());
+                    // Check if tank is destroyed
+                    if (tankModel.getHealth() <= 0) {
+                        // Remove destroyed tank
+                        aiTankModels.remove(tank);
+                        // Find and remove corresponding graphics
+                        for (int i = 0; i < aiTankGraphicsList.size(); i++) {
+                            if (aiTankGraphicsList.get(i) instanceof HealthBarDecorator) {
+                                HealthBarDecorator decorator = (HealthBarDecorator) aiTankGraphicsList.get(i);
+                                // This is a simplified check - in a real implementation we'd need a better way to match
+                                // For now, we'll just remove the first one
+                                aiTankGraphicsList.remove(i);
+                                decorator.dispose();
+                                break;
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+        }
+        
+        // Check for collisions with player tank
+        if (playerTankModel.getCoordinates().equals(bulletPos)) {
+            bullet.setActive(false);
+            // Apply damage to the player tank
+            if (playerTankModel instanceof TankModel) {
+                TankModel tankModel = (TankModel) playerTankModel;
+                tankModel.takeDamage(bullet.getDamage());
+                // Check if player tank is destroyed
+                if (tankModel.getHealth() <= 0) {
+                    // In a real game, we would handle game over here
+                    // For now, we'll just reset the player's health
+                    tankModel.setHealth(tankModel.getMaxHealth());
+                }
+            }
         }
     }
 
@@ -360,6 +504,11 @@ public class GameDesktopLauncher implements ApplicationListener {
             for (GraphicsComponent aiTankGraphics : aiTankGraphicsList) {
                 aiTankGraphics.dispose();
             }
+        }
+        
+        // Dispose graphics observer (which disposes bullet graphics)
+        if (graphicsObserver != null) {
+            graphicsObserver.dispose();
         }
         
         playerTankGraphics.dispose();

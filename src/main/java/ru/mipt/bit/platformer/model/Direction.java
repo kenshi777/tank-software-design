@@ -36,4 +36,28 @@ public enum Direction {
     public GridPoint2 applyTo(GridPoint2 point) {
         return new GridPoint2(point.x + dx, point.y + dy);
     }
+    
+    /**
+     * Gets the direction corresponding to the given rotation angle
+     * @param rotation The rotation angle in degrees
+     * @return The corresponding Direction enum value
+     */
+    public static Direction fromRotation(float rotation) {
+        // Normalize rotation to [0, 360) range
+        rotation = rotation % 360;
+        if (rotation < 0) {
+            rotation += 360;
+        }
+        
+        // Match rotation to closest direction
+        if (Math.abs(rotation - 90f) < 45f) {
+            return UP;
+        } else if (Math.abs(rotation - 270f) < 45f || Math.abs(rotation - (-90f)) < 45f) {
+            return DOWN;
+        } else if (Math.abs(rotation - 180f) < 45f || Math.abs(rotation - (-180f)) < 45f) {
+            return LEFT;
+        } else {
+            return RIGHT;
+        }
+    }
 }
