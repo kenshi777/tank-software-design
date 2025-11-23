@@ -38,6 +38,9 @@ public class SimpleCollisionDetector implements CollisionDetector {
             if (bullet == movingObject) {
                 continue;
             }
+            if (movingObject instanceof TankModel && bullet.getOwner() == movingObject) {
+                continue;
+            }
             if (bullet.getCoordinates().equals(newDestination)) {
                 return true;
             }

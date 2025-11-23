@@ -12,14 +12,16 @@ public class BulletModel implements GameObjectModel {
     private Direction direction;
     private int damage;
     private boolean active;
+    private TankModel owner;
 
-    public BulletModel(int startX, int startY, Direction direction, int damage) {
+    public BulletModel(int startX, int startY, Direction direction, int damage, TankModel owner) {
         this.coordinates = new GridPoint2(startX, startY);
         this.destinationCoordinates = direction.applyTo(coordinates);
         this.movementProgress = 0f;
         this.direction = direction;
         this.damage = damage;
         this.active = true;
+        this.owner = owner;
     }
 
     @Override
@@ -69,6 +71,10 @@ public class BulletModel implements GameObjectModel {
 
     public boolean isActive() {
         return active;
+    }
+
+    public TankModel getOwner() {
+        return owner;
     }
 
     // Setter for movement progress

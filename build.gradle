@@ -28,6 +28,7 @@ dependencies {
     implementation deps.gdx.gdx
     implementation deps.gdx.backend_lwjgl3
     runtimeOnly   deps.gdx.platform_desktop
+    implementation 'org.springframework:spring-context:5.3.36'
     
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'

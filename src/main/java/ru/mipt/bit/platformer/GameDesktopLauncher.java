@@ -8,6 +8,8 @@ import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.GridPoint2;
 import com.badlogic.gdx.math.Interpolation;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import ru.mipt.bit.platformer.config.AppConfig;
 import ru.mipt.bit.platformer.ai.AITankController;
 import ru.mipt.bit.platformer.commands.Command;
 import ru.mipt.bit.platformer.commands.MoveTankCommand;
@@ -43,6 +45,7 @@ public class GameDesktopLauncher implements ApplicationListener {
 
     private Level level;
     private TileMovement tileMovement;
+    private AnnotationConfigApplicationContext applicationContext;
 
     private TankModel playerTankModel;
     private GraphicsComponent playerTankGraphics;
@@ -60,54 +63,22 @@ public class GameDesktopLauncher implements ApplicationListener {
     private GameObjectManager gameObjectManager;
     private GraphicsObserver graphicsObserver;
     private boolean showHealthBars = false;
-    private boolean lKeyPressed = false;
     private boolean playerDestroyed = false;
 
     @Override
     public void create() {
-        batch = new SpriteBatch();
-        random = new Random();
-        inputHandler = new InputHandler();
         healthBarDecorators = new java.util.ArrayList<>();
-        
-        // Register handler for 'L' key to toggle health bars
-        inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.L, new ru.mipt.bit.platformer.input.ButtonHandler() {
-            @Override
-            public boolean handle() {
-                showHealthBars = !showHealthBars;
-                for (HealthBarDecorator decorator : healthBarDecorators) {
-                    decorator.setShowHealthBar(showHealthBars);
-                }
-                return true;
-            }
-        });
-        
-        // Register handler for spacebar to shoot
-        inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.SPACE, new ru.mipt.bit.platformer.input.ButtonHandler() {
-            @Override
-            public boolean handle() {
-                if (!playerDestroyed) {
-                    Command playerShootCommand = new ShootCommand(playerTankModel, gameObjectManager,
-                            level.getLevelWidth(), level.getLevelHeight());
-                    playerShootCommand.execute();
-                }
-                return true;
-            }
-        });
-
         try {
-            // Load level from file
-            level = new Level("levels/sample_level.txt", batch, true);
-            
-            // Or generate a random level
-            // level = new Level(batch, 10, 8);
-            
-            // For now, keep the original behavior
-            // level = new Level("level.tmx", batch);
-            
-            tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
-
-            gameObjectManager = new GameObjectManager();
+            applicationContext = new AnnotationConfigApplicationContext(AppConfig.class);
+            batch = applicationContext.getBean(Batch.class);
+            random = applicationContext.getBean(Random.class);
+            inputHandler = applicationContext.getBean(InputHandler.class);
+            level = applicationContext.getBean(Level.class);
+            tileMovement = applicationContext.getBean(TileMovement.class);
+            gameObjectManager = applicationContext.getBean(GameObjectManager.class);
+            collisionDetector = applicationContext.getBean(CollisionDetector.class);
+            aiTankController = applicationContext.getBean(AITankController.class);
+            graphicsObserver = applicationContext.getBean(GraphicsObserver.class);
 
             if (level.getPlayerStartPosition() != null) {
                 playerTankModel = new TankModel(level.getPlayerStartPosition().x, level.getPlayerStartPosition().y);
@@ -147,15 +118,18 @@ public class GameDesktopLauncher implements ApplicationListener {
                 treeObstacleModel = this.treeModels.get(0);
             }
 
-            collisionDetector = new SimpleCollisionDetector(gameObjectManager);
-            aiTankController = new AITankController(collisionDetector, level.getLevelWidth(), level.getLevelHeight());
-
-            graphicsObserver = new GraphicsObserver(gameObjectManager, batch, level.getGroundLayer());
-            gameObjectManager.addObserver(graphicsObserver);
-            gameObjectManager.notifyObservers();
         } catch (Exception e) {
             e.printStackTrace();
             // Fallback to original implementation if there's an error
+            if (batch == null) {
+                batch = new SpriteBatch();
+            }
+            if (random == null) {
+                random = new Random();
+            }
+            if (inputHandler == null) {
+                inputHandler = new InputHandler();
+            }
             level = new Level("level.tmx", batch);
             tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
             playerTankModel = new TankModel(1, 1);
@@ -178,6 +152,7 @@ public class GameDesktopLauncher implements ApplicationListener {
             gameObjectManager.addObserver(graphicsObserver);
             gameObjectManager.notifyObservers();
         }
+        registerInputHandlers();
     }
 
     /**
@@ -246,19 +221,6 @@ public class GameDesktopLauncher implements ApplicationListener {
 
         // get time passed since the last render
         float deltaTime = Gdx.graphics.getDeltaTime();
-
-        // Handle 'L' key for toggling health bars
-        if (Gdx.input.isKeyPressed(com.badlogic.gdx.Input.Keys.L)) {
-            if (!lKeyPressed) {
-                lKeyPressed = true;
-                showHealthBars = !showHealthBars;
-                for (HealthBarDecorator decorator : healthBarDecorators) {
-                    decorator.setShowHealthBar(showHealthBars);
-                }
-            }
-        } else {
-            lKeyPressed = false;
-        }
 
         // Process input handlers
         inputHandler.processInput();
@@ -427,6 +389,9 @@ public class GameDesktopLauncher implements ApplicationListener {
         }
 
         for (TankModel tank : new java.util.ArrayList<>(gameObjectManager.getTanks())) {
+            if (tank == bullet.getOwner()) {
+                continue;
+            }
             if (tank.getCoordinates().equals(bulletPos)) {
                 applyDamageToTank(tank, bullet.getDamage());
                 bullet.setActive(false);
@@ -466,6 +431,33 @@ public class GameDesktopLauncher implements ApplicationListener {
             playerTankGraphics.dispose();
             playerTankGraphics = null;
         }
+    }
+
+    private void registerInputHandlers() {
+        // Register handler for 'L' key to toggle health bars
+        inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.L, new ru.mipt.bit.platformer.input.ButtonHandler() {
+            @Override
+            public boolean handle() {
+                showHealthBars = !showHealthBars;
+                for (HealthBarDecorator decorator : healthBarDecorators) {
+                    decorator.setShowHealthBar(showHealthBars);
+                }
+                return true;
+            }
+        });
+
+        // Register handler for spacebar to shoot
+        inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.SPACE, new ru.mipt.bit.platformer.input.ButtonHandler() {
+            @Override
+            public boolean handle() {
+                if (!playerDestroyed) {
+                    Command playerShootCommand = new ShootCommand(playerTankModel, gameObjectManager,
+                            level.getLevelWidth(), level.getLevelHeight());
+                    playerShootCommand.execute();
+                }
+                return true;
+            }
+        });
     }
 
     @Override
@@ -512,6 +504,9 @@ public class GameDesktopLauncher implements ApplicationListener {
         }
         if (batch != null) {
             batch.dispose();
+        }
+        if (applicationContext != null) {
+            applicationContext.close();
         }
     }
 

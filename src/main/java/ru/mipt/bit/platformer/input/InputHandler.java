@@ -29,7 +29,7 @@ public class InputHandler {
      */
     public void processInput() {
         for (Map.Entry<Integer, ButtonHandler> entry : buttonHandlers.entrySet()) {
-            if (Gdx.input.isKeyPressed(entry.getKey())) {
+            if (Gdx.input.isKeyJustPressed(entry.getKey())) {
                 entry.getValue().handle();
             }
         }

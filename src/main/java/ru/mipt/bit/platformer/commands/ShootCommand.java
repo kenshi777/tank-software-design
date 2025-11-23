@@ -34,7 +34,7 @@ public class ShootCommand implements Command {
             return;
         }
 
-        BulletModel bullet = new BulletModel(bulletStartPos.x, bulletStartPos.y, tankDirection, 25);
+        BulletModel bullet = new BulletModel(bulletStartPos.x, bulletStartPos.y, tankDirection, 25, tank);
         gameObjectManager.addBullet(bullet);
     }
 }
