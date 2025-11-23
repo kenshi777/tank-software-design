@@ -5,12 +5,13 @@ import ru.mipt.bit.platformer.model.GameObjectManager;
 import ru.mipt.bit.platformer.model.BulletModel;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
-import com.badlogic.gdx.math.GridPoint2;
-import ru.mipt.bit.platformer.util.GdxGameUtils;
+import com.badlogic.gdx.math.Interpolation;
+import com.badlogic.gdx.math.Rectangle;
 import java.util.HashMap;
 import java.util.Map;
 
 import static ru.mipt.bit.platformer.util.GdxGameUtils.drawTextureRegionUnscaled;
+import static ru.mipt.bit.platformer.util.GdxGameUtils.moveRectangleAtTileCenter;
 
 /**
  * Observer that handles graphics rendering updates when game objects change
@@ -30,39 +31,21 @@ public class GraphicsObserver implements Observer {
 
     @Override
     public void update() {
-        // This method is called when game objects change
-        // For now, we'll handle bullet graphics creation/deletion in the render loop
-        // This is a simplified approach - in a more robust implementation, we would
-        // create/destroy graphics objects here
+        syncBulletGraphics();
     }
 
     public void renderBullets() {
-        // Render all active bullets
+        syncBulletGraphics();
+
         for (BulletModel bullet : gameObjectManager.getBullets()) {
-            if (bullet.isActive()) {
-                BulletGraphics bulletGraphics = bulletGraphicsMap.get(bullet);
-                if (bulletGraphics == null) {
-                    // Create graphics for new bullet
-                    bulletGraphics = new BulletGraphics("images/bullet.png", groundLayer, bullet);
-                    bulletGraphicsMap.put(bullet, bulletGraphics);
-                }
-                
-                // Update bullet position
-                GdxGameUtils.moveRectangleAtTileCenter(groundLayer, bulletGraphics.getRectangle(), bullet.getCoordinates());
-                
-                // Render the bullet
-                drawTextureRegionUnscaled(batch, bulletGraphics.getGraphics(), bulletGraphics.getRectangle(), 0f);
+            if (!bullet.isActive()) {
+                continue;
             }
+            BulletGraphics bulletGraphics = bulletGraphicsMap.computeIfAbsent(
+                    bullet, b -> new BulletGraphics(groundLayer, b));
+            moveBulletRectangle(bulletGraphics.getRectangle(), bullet);
+            drawTextureRegionUnscaled(batch, bulletGraphics.getGraphics(), bulletGraphics.getRectangle(), 0f);
         }
-        
-        // Remove graphics for inactive bullets
-        bulletGraphicsMap.entrySet().removeIf(entry -> {
-            if (!entry.getKey().isActive()) {
-                entry.getValue().dispose();
-                return true;
-            }
-            return false;
-        });
     }
 
     public void dispose() {
@@ -71,5 +54,37 @@ public class GraphicsObserver implements Observer {
             graphics.dispose();
         }
         bulletGraphicsMap.clear();
+    }
+
+    private void syncBulletGraphics() {
+        // Remove graphics for bullets that are gone or inactive
+        bulletGraphicsMap.entrySet().removeIf(entry -> {
+            boolean shouldRemove = !gameObjectManager.getBullets().contains(entry.getKey()) || !entry.getKey().isActive();
+            if (shouldRemove) {
+                entry.getValue().dispose();
+            }
+            return shouldRemove;
+        });
+
+        // Ensure graphics exist for every active bullet
+        for (BulletModel bullet : gameObjectManager.getBullets()) {
+            if (bullet.isActive() && !bulletGraphicsMap.containsKey(bullet)) {
+                bulletGraphicsMap.put(bullet, new BulletGraphics(groundLayer, bullet));
+            }
+        }
+    }
+
+    private void moveBulletRectangle(Rectangle rectangle, BulletModel bullet) {
+        int tileWidth = groundLayer.getTileWidth();
+        int tileHeight = groundLayer.getTileHeight();
+        float fromCenterX = (bullet.getCoordinates().x + 0.5f) * tileWidth;
+        float fromCenterY = (bullet.getCoordinates().y + 0.5f) * tileHeight;
+        float toCenterX = (bullet.getDestinationCoordinates().x + 0.5f) * tileWidth;
+        float toCenterY = (bullet.getDestinationCoordinates().y + 0.5f) * tileHeight;
+
+        float progress = bullet.getMovementProgress();
+        float centerX = Interpolation.linear.apply(fromCenterX, toCenterX, progress);
+        float centerY = Interpolation.linear.apply(fromCenterY, toCenterY, progress);
+        rectangle.setCenter(centerX, centerY);
     }
 }

@@ -1,5 +1,6 @@
 package ru.mipt.bit.platformer.graphics;
 
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
@@ -15,12 +16,11 @@ public class BulletGraphics implements GraphicsComponent {
     private TextureRegion graphics;
     private Rectangle rectangle;
 
-    public BulletGraphics(String texturePath, TiledMapTileLayer tileLayer, BulletModel bulletModel) {
-        this.texture = new Texture(texturePath);
+    public BulletGraphics(TiledMapTileLayer tileLayer, BulletModel bulletModel) {
+        this.texture = createBulletTexture();
         this.graphics = new TextureRegion(texture);
         this.rectangle = GdxGameUtils.createBoundingRectangle(graphics);
-        
-        // Position the bullet at its initial coordinates
+
         GdxGameUtils.moveRectangleAtTileCenter(tileLayer, rectangle, bulletModel.getCoordinates());
     }
 
@@ -37,5 +37,14 @@ public class BulletGraphics implements GraphicsComponent {
     @Override
     public void dispose() {
         texture.dispose();
+    }
+
+    private Texture createBulletTexture() {
+        Pixmap pixmap = new Pixmap(12, 12, Pixmap.Format.RGBA8888);
+        pixmap.setColor(1f, 0.95f, 0.2f, 1f);
+        pixmap.fillCircle(6, 6, 5);
+        Texture generated = new Texture(pixmap);
+        pixmap.dispose();
+        return generated;
     }
 }

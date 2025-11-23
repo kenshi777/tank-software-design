@@ -2,17 +2,19 @@ package ru.mipt.bit.platformer.model;
 
 import ru.mipt.bit.platformer.observer.Observable;
 import ru.mipt.bit.platformer.observer.Observer;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Manages game objects and implements the Observable pattern
  */
 public class GameObjectManager implements Observable {
-    private List<GameObjectModel> tanks;
-    private List<GameObjectModel> trees;
-    private List<BulletModel> bullets;
-    private List<Observer> observers;
+    private final List<TankModel> tanks;
+    private final List<TreeModel> trees;
+    private final List<BulletModel> bullets;
+    private final List<Observer> observers;
     private boolean objectsChanged;
 
     public GameObjectManager() {
@@ -45,47 +47,47 @@ public class GameObjectManager implements Observable {
     }
 
     // Methods for managing game objects
-    public void addTank(GameObjectModel tank) {
+    public void addTank(TankModel tank) {
         tanks.add(tank);
-        objectsChanged = true;
+        markChanged();
     }
 
-    public void removeTank(GameObjectModel tank) {
+    public void removeTank(TankModel tank) {
         tanks.remove(tank);
-        objectsChanged = true;
+        markChanged();
     }
 
-    public void addTree(GameObjectModel tree) {
+    public void addTree(TreeModel tree) {
         trees.add(tree);
-        objectsChanged = true;
+        markChanged();
     }
 
-    public void removeTree(GameObjectModel tree) {
+    public void removeTree(TreeModel tree) {
         trees.remove(tree);
-        objectsChanged = true;
+        markChanged();
     }
 
     public void addBullet(BulletModel bullet) {
         bullets.add(bullet);
-        objectsChanged = true;
+        markChanged();
     }
 
     public void removeBullet(BulletModel bullet) {
         bullets.remove(bullet);
-        objectsChanged = true;
+        markChanged();
     }
 
     // Getters
-    public List<GameObjectModel> getTanks() {
-        return new ArrayList<>(tanks);
+    public List<TankModel> getTanks() {
+        return Collections.unmodifiableList(tanks);
     }
 
-    public List<GameObjectModel> getTrees() {
-        return new ArrayList<>(trees);
+    public List<TreeModel> getTrees() {
+        return Collections.unmodifiableList(trees);
     }
 
     public List<BulletModel> getBullets() {
-        return new ArrayList<>(bullets);
+        return bullets;
     }
 
     public List<GameObjectModel> getAllObjects() {
@@ -95,5 +97,10 @@ public class GameObjectManager implements Observable {
         // Convert bullets to GameObjectModel for consistency
         allObjects.addAll(bullets);
         return allObjects;
+    }
+
+    private void markChanged() {
+        objectsChanged = true;
+        notifyObservers();
     }
 }

@@ -42,4 +42,12 @@ public class AITankController {
             aiMoveCommand.execute();
         }
     }
+
+    /**
+     * Decides whether an AI tank should shoot instead of moving.
+     * Placeholder for a recommendation engine hook; currently uses randomness.
+     */
+    public boolean shouldShoot() {
+        return random.nextFloat() < 0.15f;
+    }
 }

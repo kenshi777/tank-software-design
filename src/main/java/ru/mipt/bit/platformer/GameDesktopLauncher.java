@@ -6,14 +6,12 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.math.GridPoint2;
 import com.badlogic.gdx.math.Interpolation;
 import ru.mipt.bit.platformer.ai.AITankController;
 import ru.mipt.bit.platformer.commands.Command;
 import ru.mipt.bit.platformer.commands.MoveTankCommand;
 import ru.mipt.bit.platformer.commands.ShootCommand;
-import ru.mipt.bit.platformer.commands.ToggleHealthBarsCommand;
 import ru.mipt.bit.platformer.graphics.GraphicsComponent;
 import ru.mipt.bit.platformer.graphics.GraphicsObserver;
 import ru.mipt.bit.platformer.graphics.HealthBarDecorator;
@@ -22,7 +20,6 @@ import ru.mipt.bit.platformer.graphics.TreeGraphics;
 import ru.mipt.bit.platformer.model.BulletModel;
 import ru.mipt.bit.platformer.model.Direction;
 import ru.mipt.bit.platformer.model.GameObjectManager;
-import ru.mipt.bit.platformer.model.GameObjectModel;
 import ru.mipt.bit.platformer.model.Level;
 import ru.mipt.bit.platformer.model.TankModel;
 import ru.mipt.bit.platformer.model.TreeModel;
@@ -37,24 +34,23 @@ import static com.badlogic.gdx.graphics.GL20.GL_COLOR_BUFFER_BIT;
 import static com.badlogic.gdx.math.MathUtils.isEqual;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.*;
 
-import java.util.Arrays;
-
 public class GameDesktopLauncher implements ApplicationListener {
 
     private static final float MOVEMENT_SPEED = 0.4f;
+    private static final float BULLET_SPEED = 0.2f;
 
     private Batch batch;
 
     private Level level;
     private TileMovement tileMovement;
 
-    private GameObjectModel playerTankModel;
+    private TankModel playerTankModel;
     private GraphicsComponent playerTankGraphics;
-    private java.util.List<GameObjectModel> aiTankModels;
+    private java.util.List<TankModel> aiTankModels;
     private java.util.List<GraphicsComponent> aiTankGraphicsList;
-    private GameObjectModel treeObstacleModel;
+    private TreeModel treeObstacleModel;
     private GraphicsComponent treeObstacleGraphics;
-    private java.util.List<GameObjectModel> treeModels;
+    private java.util.List<TreeModel> treeModels;
     private java.util.List<GraphicsComponent> treeGraphicsList;
     private CollisionDetector collisionDetector;
     private Random random;
@@ -65,7 +61,7 @@ public class GameDesktopLauncher implements ApplicationListener {
     private GraphicsObserver graphicsObserver;
     private boolean showHealthBars = false;
     private boolean lKeyPressed = false;
-    private boolean spaceKeyPressed = false;
+    private boolean playerDestroyed = false;
 
     @Override
     public void create() {
@@ -90,10 +86,9 @@ public class GameDesktopLauncher implements ApplicationListener {
         inputHandler.registerHandler(com.badlogic.gdx.Input.Keys.SPACE, new ru.mipt.bit.platformer.input.ButtonHandler() {
             @Override
             public boolean handle() {
-                if (isEqual(playerTankModel.getMovementProgress(), 1f)) {
-                    // Create and execute command for player tank shooting
-                    Command playerShootCommand = new ShootCommand((TankModel) playerTankModel, gameObjectManager.getBullets(), collisionDetector, 
-                                                                 level.getLevelWidth(), level.getLevelHeight());
+                if (!playerDestroyed) {
+                    Command playerShootCommand = new ShootCommand(playerTankModel, gameObjectManager,
+                            level.getLevelWidth(), level.getLevelHeight());
                     playerShootCommand.execute();
                 }
                 return true;
@@ -112,75 +107,76 @@ public class GameDesktopLauncher implements ApplicationListener {
             
             tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
 
-            // Initialize game object manager
             gameObjectManager = new GameObjectManager();
-            
-            // Create player tank at the start position defined in the level
+
             if (level.getPlayerStartPosition() != null) {
                 playerTankModel = new TankModel(level.getPlayerStartPosition().x, level.getPlayerStartPosition().y);
             } else {
-                // Fallback to default position
                 playerTankModel = new TankModel(1, 1);
             }
             TankGraphics playerTankBaseGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
-            TankModel playerTankModelTyped = (TankModel) playerTankModel;
-            playerTankGraphics = new HealthBarDecorator(playerTankBaseGraphics, playerTankModelTyped.getHealth(), playerTankModelTyped.getMaxHealth());
+            playerTankGraphics = new HealthBarDecorator(playerTankBaseGraphics, playerTankModel);
             healthBarDecorators.add((HealthBarDecorator) playerTankGraphics);
+            gameObjectManager.addTank(playerTankModel);
 
-            // Create tree obstacles based on level data
             this.treeModels = new java.util.ArrayList<>();
             this.treeGraphicsList = new java.util.ArrayList<>();
-            
-            // For file-based or random levels, create trees from level data
+
             if (level.getTreePositions() != null && !level.getTreePositions().isEmpty()) {
                 for (GridPoint2 treePos : level.getTreePositions()) {
                     TreeModel treeModel = new TreeModel(treePos.x, treePos.y);
                     TreeGraphics treeGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), treeModel);
                     this.treeModels.add(treeModel);
                     this.treeGraphicsList.add(treeGraphics);
+                    gameObjectManager.addTree(treeModel);
                 }
             } else {
-                // Fallback to original single tree for TMX levels
                 treeObstacleModel = new TreeModel(1, 3);
-                treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), (TreeModel) treeObstacleModel);
+                treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), treeObstacleModel);
                 this.treeModels.add(treeObstacleModel);
                 this.treeGraphicsList.add(treeObstacleGraphics);
+                gameObjectManager.addTree(treeObstacleModel);
             }
 
-            // Create AI tanks after trees are initialized
             this.aiTankModels = new java.util.ArrayList<>();
             this.aiTankGraphicsList = new java.util.ArrayList<>();
-            generateRandomAITanks(3); // Generate 3 random AI tanks
-            
-            // Store references for rendering
+            generateRandomAITanks(3);
+
             if (!this.treeGraphicsList.isEmpty()) {
                 treeObstacleGraphics = this.treeGraphicsList.get(0);
                 treeObstacleModel = this.treeModels.get(0);
             }
-            
-            // Initialize collision detector with all trees and all tanks
-            java.util.List<GameObjectModel> allTanks = new java.util.ArrayList<>();
-            allTanks.add(playerTankModel);
-            allTanks.addAll(aiTankModels);
-            collisionDetector = new SimpleCollisionDetector(treeModels, allTanks);
-            
-            // Initialize AI tank controller
+
+            collisionDetector = new SimpleCollisionDetector(gameObjectManager);
             aiTankController = new AITankController(collisionDetector, level.getLevelWidth(), level.getLevelHeight());
-            
-            // Initialize graphics observer
+
             graphicsObserver = new GraphicsObserver(gameObjectManager, batch, level.getGroundLayer());
+            gameObjectManager.addObserver(graphicsObserver);
+            gameObjectManager.notifyObservers();
         } catch (Exception e) {
             e.printStackTrace();
             // Fallback to original implementation if there's an error
             level = new Level("level.tmx", batch);
             tileMovement = new TileMovement(level.getGroundLayer(), Interpolation.smooth);
             playerTankModel = new TankModel(1, 1);
-            playerTankGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
+            TankGraphics fallbackTankGraphics = new TankGraphics("images/tank_blue.png", level.getGroundLayer(), playerTankModel);
+            playerTankGraphics = new HealthBarDecorator(fallbackTankGraphics, playerTankModel);
+            healthBarDecorators.add((HealthBarDecorator) playerTankGraphics);
             treeObstacleModel = new TreeModel(1, 3);
-            treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), (TreeModel) treeObstacleModel);
-            java.util.List<GameObjectModel> fallbackTanks = new java.util.ArrayList<>();
-            fallbackTanks.add(playerTankModel);
-            collisionDetector = new SimpleCollisionDetector(Arrays.asList(treeObstacleModel), fallbackTanks);
+            treeObstacleGraphics = new TreeGraphics("images/greenTree.png", level.getGroundLayer(), treeObstacleModel);
+            aiTankModels = new java.util.ArrayList<>();
+            aiTankGraphicsList = new java.util.ArrayList<>();
+            treeModels = new java.util.ArrayList<>();
+            treeModels.add(treeObstacleModel);
+            treeGraphicsList = new java.util.ArrayList<>();
+            treeGraphicsList.add(treeObstacleGraphics);
+            gameObjectManager = new GameObjectManager();
+            gameObjectManager.addTree(treeObstacleModel);
+            gameObjectManager.addTank(playerTankModel);
+            collisionDetector = new SimpleCollisionDetector(gameObjectManager);
+            graphicsObserver = new GraphicsObserver(gameObjectManager, batch, level.getGroundLayer());
+            gameObjectManager.addObserver(graphicsObserver);
+            gameObjectManager.notifyObservers();
         }
     }
 
@@ -196,11 +192,12 @@ public class GameDesktopLauncher implements ApplicationListener {
             // Create the AI tank model and graphics
             TankModel aiTankModel = new TankModel(tankPosition.x, tankPosition.y);
             TankGraphics aiTankBaseGraphics = new TankGraphics("images/tank_red.png", level.getGroundLayer(), aiTankModel);
-            HealthBarDecorator aiTankGraphics = new HealthBarDecorator(aiTankBaseGraphics, aiTankModel.getHealth(), aiTankModel.getMaxHealth());
+            HealthBarDecorator aiTankGraphics = new HealthBarDecorator(aiTankBaseGraphics, aiTankModel);
             healthBarDecorators.add(aiTankGraphics);
             
             this.aiTankModels.add(aiTankModel);
             this.aiTankGraphicsList.add(aiTankGraphics);
+            gameObjectManager.addTank(aiTankModel);
         }
     }
 
@@ -216,12 +213,12 @@ public class GameDesktopLauncher implements ApplicationListener {
         occupiedPositions.add(playerTankModel.getCoordinates());
         
         // Add AI tank positions
-        for (GameObjectModel aiTank : aiTankModels) {
+        for (TankModel aiTank : aiTankModels) {
             occupiedPositions.add(aiTank.getCoordinates());
         }
         
         // Add tree positions
-        for (GameObjectModel tree : treeModels) {
+        for (TreeModel tree : treeModels) {
             occupiedPositions.add(tree.getCoordinates());
         }
         
@@ -268,33 +265,32 @@ public class GameDesktopLauncher implements ApplicationListener {
 
         // Handle player input
         Direction direction = InputHandler.getDirectionFromInput();
-        if (direction != null && isEqual(playerTankModel.getMovementProgress(), 1f)) {
+        if (!playerDestroyed && direction != null && isEqual(playerTankModel.getMovementProgress(), 1f)) {
             // Create and execute command for player tank movement
             Command playerMoveCommand = new MoveTankCommand(playerTankModel, direction, collisionDetector, 
                                                            level.getLevelWidth(), level.getLevelHeight());
             playerMoveCommand.execute();
         }
 
-        // Handle AI tank movement (random movement)
-        handleAITankMovement();
-        
-        // Handle AI tank shooting (random shooting)
-        handleAITankShooting();
+        // Handle AI tank actions (movement or shooting)
+        handleAITankActions();
 
         // Update player tank position
-        tileMovement.moveRectangleBetweenTileCenters(
-                playerTankGraphics.getRectangle(),
-                playerTankModel.getCoordinates(),
-                playerTankModel.getDestinationCoordinates(),
-                playerTankModel.getMovementProgress());
+        if (!playerDestroyed && playerTankGraphics != null) {
+            tileMovement.moveRectangleBetweenTileCenters(
+                    playerTankGraphics.getRectangle(),
+                    playerTankModel.getCoordinates(),
+                    playerTankModel.getDestinationCoordinates(),
+                    playerTankModel.getMovementProgress());
 
-        float newMovementProgress = continueProgress(playerTankModel.getMovementProgress(), deltaTime, MOVEMENT_SPEED);
-        playerTankModel.setMovementProgress(newMovementProgress);
-        playerTankModel.updatePosition();
+            float newMovementProgress = continueProgress(playerTankModel.getMovementProgress(), deltaTime, MOVEMENT_SPEED);
+            playerTankModel.setMovementProgress(newMovementProgress);
+            playerTankModel.updatePosition();
+        }
 
         // Update AI tank positions
         for (int i = 0; i < aiTankModels.size(); i++) {
-            GameObjectModel aiTankModel = aiTankModels.get(i);
+            TankModel aiTankModel = aiTankModels.get(i);
             GraphicsComponent aiTankGraphics = aiTankGraphicsList.get(i);
             
             tileMovement.moveRectangleBetweenTileCenters(
@@ -317,16 +313,17 @@ public class GameDesktopLauncher implements ApplicationListener {
         // start recording all drawing commands
         batch.begin();
 
-        // render player tank
-        drawTextureRegionUnscaled(batch, playerTankGraphics.getGraphics(), playerTankGraphics.getRectangle(), 
-                                 ((ru.mipt.bit.platformer.model.RotatingGameObject) playerTankModel).getRotation());
+        if (!playerDestroyed && playerTankGraphics != null) {
+            drawTextureRegionUnscaled(batch, playerTankGraphics.getGraphics(), playerTankGraphics.getRectangle(),
+                    playerTankModel.getRotation());
+        }
 
         // render AI tanks
         for (int i = 0; i < aiTankGraphicsList.size(); i++) {
             GraphicsComponent aiTankGraphics = aiTankGraphicsList.get(i);
-            GameObjectModel aiTankModel = aiTankModels.get(i);
+            TankModel aiTankModel = aiTankModels.get(i);
             drawTextureRegionUnscaled(batch, aiTankGraphics.getGraphics(), aiTankGraphics.getRectangle(), 
-                                     ((ru.mipt.bit.platformer.model.RotatingGameObject) aiTankModel).getRotation());
+                                     aiTankModel.getRotation());
         }
 
         // render tree obstacles
@@ -342,7 +339,7 @@ public class GameDesktopLauncher implements ApplicationListener {
         // render health bars for tanks if enabled
         if (showHealthBars) {
             // Render player tank health bar
-            if (playerTankGraphics instanceof HealthBarDecorator) {
+            if (!playerDestroyed && playerTankGraphics instanceof HealthBarDecorator) {
                 ((HealthBarDecorator) playerTankGraphics).renderHealthBar(batch, playerTankGraphics.getRectangle());
             }
 
@@ -358,26 +355,14 @@ public class GameDesktopLauncher implements ApplicationListener {
         batch.end();
     }
 
-    /**
-     * Handles movement for all AI tanks with random directions
-     */
-    private void handleAITankMovement() {
-        for (GameObjectModel aiTankModel : aiTankModels) {
-            aiTankController.moveAITank(aiTankModel);
-        }
-    }
-    
-    /**
-     * Handles shooting for all AI tanks with random probability
-     */
-    private void handleAITankShooting() {
-        // 5% chance for each AI tank to shoot on each frame
-        for (GameObjectModel aiTankModel : aiTankModels) {
-            if (random.nextFloat() < 0.05f && isEqual(aiTankModel.getMovementProgress(), 1f)) {
-                // Create and execute command for AI tank shooting
-                Command aiShootCommand = new ShootCommand((TankModel) aiTankModel, gameObjectManager.getBullets(), collisionDetector, 
-                                                         level.getLevelWidth(), level.getLevelHeight());
+    private void handleAITankActions() {
+        for (TankModel aiTankModel : new java.util.ArrayList<>(aiTankModels)) {
+            if (aiTankController.shouldShoot()) {
+                Command aiShootCommand = new ShootCommand(aiTankModel, gameObjectManager,
+                        level.getLevelWidth(), level.getLevelHeight());
                 aiShootCommand.execute();
+            } else {
+                aiTankController.moveAITank(aiTankModel);
             }
         }
     }
@@ -386,92 +371,100 @@ public class GameDesktopLauncher implements ApplicationListener {
      * Updates bullet positions and handles collisions
      */
     private void updateBullets(float deltaTime) {
-        java.util.List<BulletModel> bullets = gameObjectManager.getBullets();
-        
-        // Update bullet positions
-        for (BulletModel bullet : bullets) {
-            if (bullet.isActive()) {
-                // Move the bullet
-                bullet.move();
-                
-                // Update bullet position
-                float newMovementProgress = continueProgress(bullet.getMovementProgress(), deltaTime, MOVEMENT_SPEED);
-                bullet.setMovementProgress(newMovementProgress);
+        for (BulletModel bullet : new java.util.ArrayList<>(gameObjectManager.getBullets())) {
+            if (!bullet.isActive()) {
+                gameObjectManager.removeBullet(bullet);
+                continue;
+            }
+
+            if (checkBulletCollisions(bullet)) {
+                gameObjectManager.removeBullet(bullet);
+                continue;
+            }
+
+            float newMovementProgress = continueProgress(bullet.getMovementProgress(), deltaTime, BULLET_SPEED);
+            bullet.setMovementProgress(newMovementProgress);
+
+            if (isEqual(newMovementProgress, 1f)) {
                 bullet.updatePosition();
-                
-                // Check for collisions
-                checkBulletCollisions(bullet);
+                if (checkBulletCollisions(bullet)) {
+                    gameObjectManager.removeBullet(bullet);
+                    continue;
+                }
+                bullet.move();
             }
         }
-        
-        // Remove inactive bullets
-        bullets.removeIf(bullet -> !bullet.isActive());
     }
     
     /**
      * Checks for collisions with a bullet
      */
-    private void checkBulletCollisions(BulletModel bullet) {
-        // Check boundaries
+    private boolean checkBulletCollisions(BulletModel bullet) {
         GridPoint2 bulletPos = bullet.getCoordinates();
-        if (bulletPos.x < 0 || bulletPos.x >= level.getLevelWidth() || 
-            bulletPos.y < 0 || bulletPos.y >= level.getLevelHeight()) {
+        if (bulletPos.x < 0 || bulletPos.x >= level.getLevelWidth()
+                || bulletPos.y < 0 || bulletPos.y >= level.getLevelHeight()) {
             bullet.setActive(false);
-            return;
+            return true;
         }
-        
-        // Check for collisions with trees
-        for (GameObjectModel tree : treeModels) {
+
+        for (TreeModel tree : gameObjectManager.getTrees()) {
             if (tree.getCoordinates().equals(bulletPos)) {
                 bullet.setActive(false);
-                return;
+                return true;
             }
         }
-        
-        // Check for collisions with tanks (including player)
-        // Don't check against the tank that fired the bullet
-        for (GameObjectModel tank : aiTankModels) {
-            if (tank.getCoordinates().equals(bulletPos)) {
+
+        for (BulletModel other : new java.util.ArrayList<>(gameObjectManager.getBullets())) {
+            if (other == bullet) {
+                continue;
+            }
+            if (other.getCoordinates().equals(bulletPos)) {
+                other.setActive(false);
+                gameObjectManager.removeBullet(other);
                 bullet.setActive(false);
-                // Apply damage to the tank
-                if (tank instanceof TankModel) {
-                    TankModel tankModel = (TankModel) tank;
-                    tankModel.takeDamage(bullet.getDamage());
-                    // Check if tank is destroyed
-                    if (tankModel.getHealth() <= 0) {
-                        // Remove destroyed tank
-                        aiTankModels.remove(tank);
-                        // Find and remove corresponding graphics
-                        for (int i = 0; i < aiTankGraphicsList.size(); i++) {
-                            if (aiTankGraphicsList.get(i) instanceof HealthBarDecorator) {
-                                HealthBarDecorator decorator = (HealthBarDecorator) aiTankGraphicsList.get(i);
-                                // This is a simplified check - in a real implementation we'd need a better way to match
-                                // For now, we'll just remove the first one
-                                aiTankGraphicsList.remove(i);
-                                decorator.dispose();
-                                break;
-                            }
-                        }
-                    }
-                }
-                return;
+                return true;
             }
         }
-        
-        // Check for collisions with player tank
-        if (playerTankModel.getCoordinates().equals(bulletPos)) {
-            bullet.setActive(false);
-            // Apply damage to the player tank
-            if (playerTankModel instanceof TankModel) {
-                TankModel tankModel = (TankModel) playerTankModel;
-                tankModel.takeDamage(bullet.getDamage());
-                // Check if player tank is destroyed
-                if (tankModel.getHealth() <= 0) {
-                    // In a real game, we would handle game over here
-                    // For now, we'll just reset the player's health
-                    tankModel.setHealth(tankModel.getMaxHealth());
-                }
+
+        for (TankModel tank : new java.util.ArrayList<>(gameObjectManager.getTanks())) {
+            if (tank.getCoordinates().equals(bulletPos)) {
+                applyDamageToTank(tank, bullet.getDamage());
+                bullet.setActive(false);
+                return true;
             }
+        }
+
+        return false;
+    }
+
+    private void applyDamageToTank(TankModel tank, int damage) {
+        tank.takeDamage(damage);
+        if (tank.getHealth() <= 0) {
+            removeTank(tank);
+        }
+    }
+
+    private void removeTank(TankModel tank) {
+        gameObjectManager.removeTank(tank);
+
+        int aiIndex = aiTankModels.indexOf(tank);
+        if (aiIndex >= 0) {
+            aiTankModels.remove(aiIndex);
+            GraphicsComponent aiGraphics = aiTankGraphicsList.remove(aiIndex);
+            if (aiGraphics instanceof HealthBarDecorator) {
+                healthBarDecorators.remove(aiGraphics);
+            }
+            aiGraphics.dispose();
+            return;
+        }
+
+        if (tank == playerTankModel) {
+            playerDestroyed = true;
+            if (playerTankGraphics instanceof HealthBarDecorator) {
+                healthBarDecorators.remove(playerTankGraphics);
+            }
+            playerTankGraphics.dispose();
+            playerTankGraphics = null;
         }
     }
 
@@ -511,9 +504,15 @@ public class GameDesktopLauncher implements ApplicationListener {
             graphicsObserver.dispose();
         }
         
-        playerTankGraphics.dispose();
-        level.dispose();
-        batch.dispose();
+        if (playerTankGraphics != null) {
+            playerTankGraphics.dispose();
+        }
+        if (level != null) {
+            level.dispose();
+        }
+        if (batch != null) {
+            batch.dispose();
+        }
     }
 
     public static void main(String[] args) {

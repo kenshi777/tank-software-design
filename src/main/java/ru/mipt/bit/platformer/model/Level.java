@@ -4,6 +4,8 @@ import com.badlogic.gdx.maps.MapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
+import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.math.GridPoint2;
 import ru.mipt.bit.platformer.util.GdxGameUtils;
@@ -26,6 +28,8 @@ public class Level {
     private List<GridPoint2> treePositions;
     private int levelWidth;
     private int levelHeight;
+    private Texture tileTexture1;
+    private Texture tileTexture2;
 
     // Constructor for loading from TMX file
     public Level(String mapPath, Batch batch) {
@@ -128,15 +132,28 @@ public class Level {
     }
 
     private void createBasicMap(Batch batch) {
-        // For text-based levels, we'll create a simple map with uniform grass tiles
-        // In a real implementation, you might want to create a more sophisticated map
+        // Generate a simple single-layer map matching the logical level size
         try {
-            this.map = new TmxMapLoader().load("level.tmx");
+            this.map = new TiledMap();
+            this.tileTexture1 = new Texture("images/tileGrass1.png");
+            this.tileTexture2 = new Texture("images/tileGrass2.png");
+            StaticTiledMapTile grass1 = new StaticTiledMapTile(new com.badlogic.gdx.graphics.g2d.TextureRegion(tileTexture1));
+            StaticTiledMapTile grass2 = new StaticTiledMapTile(new com.badlogic.gdx.graphics.g2d.TextureRegion(tileTexture2));
+
+            int tileSize = 128;
+            TiledMapTileLayer layer = new TiledMapTileLayer(levelWidth, levelHeight, tileSize, tileSize);
+            for (int x = 0; x < levelWidth; x++) {
+                for (int y = 0; y < levelHeight; y++) {
+                    TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
+                    // Simple checkerboard so the grid is visible
+                    cell.setTile(((x + y) % 2 == 0) ? grass1 : grass2);
+                    layer.setCell(x, y, cell);
+                }
+            }
+            map.getLayers().add(layer);
+            this.groundLayer = layer;
             this.renderer = GdxGameUtils.createSingleLayerMapRenderer(map, batch);
-            this.groundLayer = GdxGameUtils.getSingleLayer(map);
         } catch (Exception e) {
-            // If we can't load the default map, we'll need to create a basic one
-            // For now, we'll just re-throw the exception to be handled upstream
             throw new RuntimeException("Failed to create map for level", e);
         }
     }
@@ -146,7 +163,15 @@ public class Level {
     }
 
     public void dispose() {
-        map.dispose();
+        if (map != null) {
+            map.dispose();
+        }
+        if (tileTexture1 != null) {
+            tileTexture1.dispose();
+        }
+        if (tileTexture2 != null) {
+            tileTexture2.dispose();
+        }
     }
 
     // Getters

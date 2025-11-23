@@ -1,54 +1,47 @@
 package ru.mipt.bit.platformer.util;
 
 import com.badlogic.gdx.math.GridPoint2;
+import ru.mipt.bit.platformer.model.BulletModel;
+import ru.mipt.bit.platformer.model.GameObjectManager;
 import ru.mipt.bit.platformer.model.GameObjectModel;
-
-import java.util.List;
+import ru.mipt.bit.platformer.model.TankModel;
+import ru.mipt.bit.platformer.model.TreeModel;
 
 public class SimpleCollisionDetector implements CollisionDetector {
-    private final List<GameObjectModel> obstacles;
-    private final List<GameObjectModel> allTanks;
+    private final GameObjectManager gameObjectManager;
 
-    public SimpleCollisionDetector(List<GameObjectModel> obstacles, List<GameObjectModel> allTanks) {
-        this.obstacles = obstacles;
-        this.allTanks = allTanks;
+    public SimpleCollisionDetector(GameObjectManager gameObjectManager) {
+        this.gameObjectManager = gameObjectManager;
     }
 
     @Override
     public boolean isCollision(GameObjectModel movingObject, GridPoint2 newDestination) {
-        // Check collision with all obstacles
-        for (GameObjectModel obstacle : obstacles) {
+        for (TreeModel obstacle : gameObjectManager.getTrees()) {
             if (obstacle.getCoordinates().equals(newDestination)) {
                 return true;
             }
         }
-        
-        // Check collision with all tanks (both current positions and movement paths)
-        for (GameObjectModel tank : allTanks) {
-            // Skip the moving tank itself
+
+        for (TankModel tank : gameObjectManager.getTanks()) {
             if (tank == movingObject) {
                 continue;
             }
-            
-            // Check if the destination collides with the tank's current position
             if (tank.getCoordinates().equals(newDestination)) {
                 return true;
             }
-            
-            // Check if the destination collides with a moving tank's path
-            // If a tank is moving, both its current position and destination are occupied
-            if (tank.getMovementProgress() < 1.0f) {
-                // Check if destination collides with the moving tank's destination
-                if (tank.getDestinationCoordinates().equals(newDestination)) {
-                    return true;
-                }
-                // Check if destination collides with the moving tank's current position
-                if (tank.getCoordinates().equals(newDestination)) {
-                    return true;
-                }
+            if (tank.getMovementProgress() < 1.0f && tank.getDestinationCoordinates().equals(newDestination)) {
+                return true;
             }
         }
-        
+
+        for (BulletModel bullet : gameObjectManager.getBullets()) {
+            if (bullet == movingObject) {
+                continue;
+            }
+            if (bullet.getCoordinates().equals(newDestination)) {
+                return true;
+            }
+        }
         return false;
     }
 }
